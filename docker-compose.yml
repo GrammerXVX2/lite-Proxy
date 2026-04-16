@@ -1,0 +1,66 @@
+services:
+  vllm-embed:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-embed
+    restart: unless-stopped
+    command: >
+      --model lainlives/Qwen3-Embedding-4B-bnb-4bit
+      --host 0.0.0.0
+      --port 8001
+      --dtype auto
+      --gpu-memory-utilization 0.20
+      --max-model-len 8192
+      --runner pooling
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+    ports:
+      - "8001:8001"
+    ipc: host
+    gpus: all
+    volumes:
+      - /mnt/raid0/ftpuser/dwr/hf-cache:/root/.cache/huggingface
+
+  vllm-reranker:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-reranker
+    restart: unless-stopped
+    command: >
+      --model Qwen/Qwen3-Reranker-0.6B
+      --host 0.0.0.0
+      --port 8002
+      --dtype float16
+      --gpu-memory-utilization 0.12
+      --max-model-len 4096
+      --hf_overrides '{"architectures": ["Qwen3ForSequenceClassification"],"classifier_from_token": ["no", "yes"],"is_original_qwen3_reranker": true}'
+      --enforce-eager
+      --runner pooling
+      --chat-template examples/pooling/score/template/qwen3_reranker.jinja
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+    ports:
+      - "8002:8002"
+    ipc: host
+    gpus: all
+    volumes:
+      - /mnt/raid0/ftpuser/dwr/hf-cache:/root/.cache/huggingface
+
+  vllm-chat:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-chat
+    restart: unless-stopped
+    command: >
+      --model cyankiwi/Qwen3.5-9B-AWQ-4bit
+      --host 0.0.0.0
+      --port 8003
+      --dtype float16
+      --gpu-memory-utilization 0.70
+      --max-model-len 32768
+      --trust-remote-code
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+    ports:
+      - "8003:8003"
+    ipc: host
+    gpus: all
+    volumes:
+      - /mnt/raid0/ftpuser/dwr/hf-cache:/root/.cache/huggingface
