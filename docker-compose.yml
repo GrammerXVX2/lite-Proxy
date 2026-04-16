@@ -10,6 +10,7 @@ services:
       --dtype auto
       --gpu-memory-utilization 0.20
       --max-model-len 8192
+      --max-num-seqs 4
       --runner pooling
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
@@ -37,6 +38,7 @@ services:
       --dtype float16
       --gpu-memory-utilization 0.12
       --max-model-len 4096
+      --max-num-seqs 4
       --hf_overrides '{"architectures": ["Qwen3ForSequenceClassification"],"classifier_from_token": ["no", "yes"],"is_original_qwen3_reranker": true}'
       --enforce-eager
       --runner pooling
@@ -70,6 +72,7 @@ services:
       --dtype float16
       --gpu-memory-utilization 0.70
       --max-model-len 32768
+      --max-num-seqs 4
       --trust-remote-code
     depends_on:
       vllm-reranker:
@@ -102,6 +105,7 @@ services:
     environment:
       - VLLM_BASE_URL=http://vllm-chat:8013/v1
       - LITE_MODEL_CONFIG_FILE=models.docker.json
+      - UPSTREAM_TIMEOUT_SECONDS=120
     ports:
       - "11435:11435"
     volumes:
