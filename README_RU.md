@@ -66,9 +66,9 @@
 
 ## 6. Текущая локальная конфигурация моделей
 Сейчас настроено так:
-- Embeddings: `lainlives/Qwen3-Embedding-4B-bnb-4bit` -> `http://127.0.0.1:8001/v1`
-- Reranker: `Qwen/Qwen3-Reranker-0.6B` -> `http://127.0.0.1:8002/v1`
-- Chat: `cyankiwi/Qwen3.5-9B-AWQ-4bit` -> `http://127.0.0.1:8003/v1`
+- Embeddings: `lainlives/Qwen3-Embedding-4B-bnb-4bit` -> `http://127.0.0.1:8011/v1`
+- Reranker: `Qwen/Qwen3-Reranker-0.6B` -> `http://127.0.0.1:8012/v1`
+- Chat: `cyankiwi/Qwen3.5-9B-AWQ-4bit` -> `http://127.0.0.1:8013/v1`
 
 Порт прокси:
 - `11435`
@@ -131,7 +131,7 @@ curl -s http://127.0.0.1:11435/api/reranker/rerank/v1 \
 ## 9. Частые проблемы и как решать
 1. `connection error` или 502:
 - значит прокси не достучался до vLLM
-- проверьте, что сервисы на портах 8001/8002/8003 реально запущены
+- проверьте, что сервисы на портах 8011/8012/8013 реально запущены
 
 2. Пустой список или неправильная модель:
 - проверьте `models.json`

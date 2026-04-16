@@ -24,7 +24,7 @@ Compatibility endpoints for reranker are also included:
 
 Configuration
 1. Base upstream endpoint:
-   - `VLLM_BASE_URL=http://127.0.0.1:8000/v1`
+   - `VLLM_BASE_URL=http://127.0.0.1:8010/v1`
 2. Model routing file:
    - `LITE_MODEL_CONFIG_FILE=models.json`
    - `models.json` supports per-model `max_tokens` (token cap is not used).
@@ -45,4 +45,4 @@ Run locally
 
 Run in Docker
 - `docker build -t lite-proxy .`
-- `docker run --rm -p 11435:11435 -e VLLM_BASE_URL=http://host.docker.internal:8000/v1 lite-proxy`
+- `docker run --rm -p 11435:11435 -e VLLM_BASE_URL=http://host.docker.internal:8010/v1 lite-proxy`

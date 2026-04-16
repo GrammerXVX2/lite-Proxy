@@ -54,9 +54,9 @@ Each model supports per-model:
 - `min_context_headroom`
 
 ## Current Local Model Setup
-- Embeddings: `lainlives/Qwen3-Embedding-4B-bnb-4bit` -> `http://127.0.0.1:8001/v1`
-- Reranker: `Qwen/Qwen3-Reranker-0.6B` -> `http://127.0.0.1:8002/v1`
-- Chat: `cyankiwi/Qwen3.5-9B-AWQ-4bit` -> `http://127.0.0.1:8003/v1`
+- Embeddings: `lainlives/Qwen3-Embedding-4B-bnb-4bit` -> `http://127.0.0.1:8011/v1`
+- Reranker: `Qwen/Qwen3-Reranker-0.6B` -> `http://127.0.0.1:8012/v1`
+- Chat: `cyankiwi/Qwen3.5-9B-AWQ-4bit` -> `http://127.0.0.1:8013/v1`
 
 ## Run Locally
 ```bash
@@ -67,7 +67,7 @@ uvicorn app:app --host 0.0.0.0 --port 11435
 ## Run in Docker
 ```bash
 docker build -t lite-proxy .
-docker run --rm -p 11435:11435 -e VLLM_BASE_URL=http://host.docker.internal:8000/v1 lite-proxy
+docker run --rm -p 11435:11435 -e VLLM_BASE_URL=http://host.docker.internal:8010/v1 lite-proxy
 ```
 
 ## Quick Smoke Checks

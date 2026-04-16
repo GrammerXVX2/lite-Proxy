@@ -34,7 +34,7 @@ def _parse_retry_status_codes(raw: str) -> set[int]:
     return codes or {502, 503, 504}
 
 
-VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1").strip().rstrip("/")
+VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://localhost:8010/v1").strip().rstrip("/")
 
 # Preferred source: JSON file with model routes (for example ./models.json).
 LITE_MODEL_CONFIG_FILE = os.getenv("LITE_MODEL_CONFIG_FILE", "models.json").strip()

@@ -6,7 +6,7 @@ services:
     command: >
       --model lainlives/Qwen3-Embedding-4B-bnb-4bit
       --host 0.0.0.0
-      --port 8001
+      --port 8011
       --dtype auto
       --gpu-memory-utilization 0.20
       --max-model-len 8192
@@ -14,13 +14,13 @@ services:
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
     ports:
-      - "8001:8001"
+      - "8011:8011"
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
-      interval: 15s
+      test: ["CMD", "python3", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 8011), 3); s.close()"]
+      interval: 10s
       timeout: 5s
-      retries: 40
-      start_period: 30s
+      retries: 60
+      start_period: 300s
     ipc: host
     gpus: all
     volumes:
@@ -33,7 +33,7 @@ services:
     command: >
       --model Qwen/Qwen3-Reranker-0.6B
       --host 0.0.0.0
-      --port 8002
+      --port 8012
       --dtype float16
       --gpu-memory-utilization 0.12
       --max-model-len 4096
@@ -47,13 +47,13 @@ services:
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
     ports:
-      - "8002:8002"
+      - "8012:8012"
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=3)"]
-      interval: 15s
+      test: ["CMD", "python3", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 8012), 3); s.close()"]
+      interval: 10s
       timeout: 5s
-      retries: 40
-      start_period: 30s
+      retries: 60
+      start_period: 300s
     ipc: host
     gpus: all
     volumes:
@@ -66,7 +66,7 @@ services:
     command: >
       --model cyankiwi/Qwen3.5-9B-AWQ-4bit
       --host 0.0.0.0
-      --port 8003
+      --port 8013
       --dtype float16
       --gpu-memory-utilization 0.70
       --max-model-len 32768
@@ -77,13 +77,13 @@ services:
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
     ports:
-      - "8003:8003"
+      - "8013:8013"
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health', timeout=3)"]
-      interval: 15s
+      test: ["CMD", "python3", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 8013), 3); s.close()"]
+      interval: 10s
       timeout: 5s
-      retries: 40
-      start_period: 30s
+      retries: 90
+      start_period: 600s
     ipc: host
     gpus: all
     volumes:
@@ -100,7 +100,7 @@ services:
     env_file:
       - ./.env
     environment:
-      - VLLM_BASE_URL=http://vllm-chat:8003/v1
+      - VLLM_BASE_URL=http://vllm-chat:8013/v1
       - LITE_MODEL_CONFIG_FILE=models.docker.json
     ports:
       - "11435:11435"
