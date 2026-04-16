@@ -15,10 +15,16 @@ services:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
     ports:
       - "8001:8001"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
     ipc: host
     gpus: all
     volumes:
-      - /mnt/raid0/ftpuser/dwr/hf-cache:/root/.cache/huggingface
+      - ./.cache/huggingface:/root/.cache/huggingface
 
   vllm-reranker:
     image: vllm/vllm-openai:latest
@@ -35,14 +41,23 @@ services:
       --enforce-eager
       --runner pooling
       --chat-template examples/pooling/score/template/qwen3_reranker.jinja
+    depends_on:
+      vllm-embed:
+        condition: service_healthy
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
     ports:
       - "8002:8002"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
     ipc: host
     gpus: all
     volumes:
-      - /mnt/raid0/ftpuser/dwr/hf-cache:/root/.cache/huggingface
+      - ./.cache/huggingface:/root/.cache/huggingface
 
   vllm-chat:
     image: vllm/vllm-openai:latest
@@ -56,11 +71,44 @@ services:
       --gpu-memory-utilization 0.70
       --max-model-len 32768
       --trust-remote-code
+    depends_on:
+      vllm-reranker:
+        condition: service_healthy
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
     ports:
       - "8003:8003"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
     ipc: host
     gpus: all
     volumes:
-      - /mnt/raid0/ftpuser/dwr/hf-cache:/root/.cache/huggingface
+      - ./.cache/huggingface:/root/.cache/huggingface
+
+  lite-proxy:
+    build:
+      context: .
+    container_name: lite-proxy
+    restart: unless-stopped
+    depends_on:
+      vllm-chat:
+        condition: service_healthy
+    env_file:
+      - ./.env
+    environment:
+      - VLLM_BASE_URL=http://vllm-chat:8003/v1
+      - LITE_MODEL_CONFIG_FILE=models.docker.json
+    ports:
+      - "11435:11435"
+    volumes:
+      - ./models.docker.json:/app/models.docker.json:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:11435/api/models', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
