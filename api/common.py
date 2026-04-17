@@ -89,13 +89,27 @@ def analyze_max_tokens_budget(
     - min_context_headroom: резерв токенов, оставляемый свободным.
     - default_max_tokens: дефолтный размер генерации для модели.
 
-    Что делает:
-    - Вычисляет финальный `max_tokens` с учётом запроса клиента и доступного бюджета контекста.
+        Что делает:
+        - Вычисляет финальный `max_tokens` с учётом запроса клиента и доступного бюджета контекста.
+        - Поддерживает Ollama-style `num_ctx` (в корне или в `options`) как желаемый контекст
+            в пределах лимита модели.
 
     Выходные данные:
     - Словарь с ключом `resolved_max_tokens`.
     """
     options = body.get("options") if isinstance(body.get("options"), dict) else {}
+
+    requested_ctx_raw = body.get("num_ctx")
+    if requested_ctx_raw is None:
+        requested_ctx_raw = options.get("num_ctx")
+
+    requested_context_value = None
+    if requested_ctx_raw is not None:
+        try:
+            requested_context_value = max(1, int(requested_ctx_raw))
+        except (TypeError, ValueError):
+            requested_context_value = None
+
     requested_raw = body.get("max_tokens")
     if requested_raw is None:
         requested_raw = options.get("num_predict")
@@ -107,7 +121,12 @@ def analyze_max_tokens_budget(
         except (TypeError, ValueError):
             requested_value = None
 
-    resolved_context = max(1, int(max_context_tokens or MAX_CONTEXT_TOKENS))
+    model_context_limit = max(1, int(max_context_tokens or MAX_CONTEXT_TOKENS))
+    if requested_context_value is None:
+        resolved_context = model_context_limit
+    else:
+        resolved_context = min(requested_context_value, model_context_limit)
+
     resolved_headroom = max(0, int(min_context_headroom or MIN_CONTEXT_HEADROOM))
     resolved_default = max(1, int(default_max_tokens or DEFAULT_MAX_TOKENS))
 

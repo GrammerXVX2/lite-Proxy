@@ -4,7 +4,7 @@ services:
     container_name: vllm-embed
     restart: unless-stopped
     command: >
-      --model lainlives/Qwen3-Embedding-4B-bnb-4bit
+      --model ${MODEL_EMBED}
       --host 0.0.0.0
       --port 8011
       --dtype auto
@@ -32,7 +32,7 @@ services:
     container_name: vllm-reranker
     restart: unless-stopped
     command: >
-      --model Qwen/Qwen3-Reranker-0.6B
+      --model ${MODEL_RERANK}
       --host 0.0.0.0
       --port 8012
       --dtype float16
@@ -66,7 +66,7 @@ services:
     container_name: vllm-chat
     restart: unless-stopped
     command: >
-      --model cyankiwi/Qwen3.5-9B-AWQ-4bit
+      --model ${MODEL_CHAT}
       --host 0.0.0.0
       --port 8013
       --dtype float16

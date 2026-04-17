@@ -1,7 +1,7 @@
 [
   {
-    "model": "lainlives/Qwen3-Embedding-4B-bnb-4bit",
-    "backend_model": "lainlives/Qwen3-Embedding-4B-bnb-4bit",
+    "model": "${MODEL_EMBED}",
+    "backend_model": "${MODEL_EMBED}",
     "type": "embeddings",
     "base_url": "http://vllm-embed:8011/v1",
     "max_context_tokens": 8192,
@@ -12,8 +12,8 @@
     "aliases": ["qwen3-embedding-4b", "embed", "embedding", "qwen-embed", "qwen-embedding"]
   },
   {
-    "model": "Qwen/Qwen3-Reranker-0.6B",
-    "backend_model": "Qwen/Qwen3-Reranker-0.6B",
+    "model": "${MODEL_RERANK}",
+    "backend_model": "${MODEL_RERANK}",
     "type": "reranker",
     "base_url": "http://vllm-reranker:8012/v1",
     "max_context_tokens": 4096,
@@ -24,8 +24,8 @@
     "aliases": ["qwen3-reranker-0.6b", "reranker", "rerank", "qwen-reranker", "qwen-rerank"]
   },
   {
-    "model": "cyankiwi/Qwen3.5-9B-AWQ-4bit",
-    "backend_model": "cyankiwi/Qwen3.5-9B-AWQ-4bit",
+    "model": "${MODEL_CHAT}",
+    "backend_model": "${MODEL_CHAT}",
     "type": "chat",
     "base_url": "http://vllm-chat:8013/v1",
     "max_context_tokens": 32768,

@@ -42,9 +42,9 @@ LITE_MODEL_CONFIG_FILE = os.getenv("LITE_MODEL_CONFIG_FILE", "models.json").stri
 # Optional fallback: inline JSON config for model routing in lite mode.
 LITE_MODEL_CONFIG_JSON = os.getenv("LITE_MODEL_CONFIG_JSON", "").strip()
 
-DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", "lite-chat")
-DEFAULT_EMBED_MODEL = os.getenv("DEFAULT_EMBED_MODEL", "lite-embed")
-DEFAULT_RERANK_MODEL = os.getenv("DEFAULT_RERANK_MODEL", "lite-rerank")
+DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", os.getenv("MODEL_CHAT", "lite-chat"))
+DEFAULT_EMBED_MODEL = os.getenv("DEFAULT_EMBED_MODEL", os.getenv("MODEL_EMBED", "lite-embed"))
+DEFAULT_RERANK_MODEL = os.getenv("DEFAULT_RERANK_MODEL", os.getenv("MODEL_RERANK", "lite-rerank"))
 
 DEFAULT_MAX_TOKENS = int(os.getenv("DEFAULT_MAX_TOKENS", "1024"))
 MAX_CONTEXT_TOKENS = int(os.getenv("MAX_CONTEXT_TOKENS", "8192"))

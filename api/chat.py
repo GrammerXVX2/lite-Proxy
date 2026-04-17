@@ -55,6 +55,25 @@ def _resolve_sampling_param(body_data: Dict[str, Any], key: str) -> Any:
     return CHAT_DEFAULT_SAMPLING[key]
 
 
+def _resolve_optional_param(body_data: Dict[str, Any], key: str) -> Any:
+    """
+    Параметры:
+    - body_data: тело входного запроса.
+    - key: имя опционального параметра.
+
+    Что делает:
+    - Ищет параметр сначала в корне запроса, затем в `options`.
+
+    Выходные данные:
+    - Найденное значение или `None`.
+    """
+    value = body_data.get(key)
+    if value is not None:
+        return value
+    options = body_data.get("options") if isinstance(body_data.get("options"), dict) else {}
+    return options.get(key)
+
+
 def _build_sampling_payload(body_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Параметры:
@@ -66,10 +85,20 @@ def _build_sampling_payload(body_data: Dict[str, Any]) -> Dict[str, Any]:
     Выходные данные:
     - Словарь sampling-параметров.
     """
-    return {
+    payload = {
         key: _resolve_sampling_param(body_data, key)
         for key in CHAT_DEFAULT_SAMPLING
     }
+
+    # Optional deterministic seed (Ollama-style `options.seed`).
+    seed_raw = _resolve_optional_param(body_data, "seed")
+    if seed_raw is not None:
+        try:
+            payload["seed"] = int(seed_raw)
+        except (TypeError, ValueError):
+            pass
+
+    return payload
 
 
 def _extract_messages(body_data: Dict[str, Any]) -> List[Dict[str, Any]]:

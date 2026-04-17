@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 from copy import deepcopy
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -21,6 +22,20 @@ from settings import (
 )
 
 _ALLOWED_TYPES = {"chat", "embeddings", "reranker"}
+
+
+def _expand_env(value: Any) -> str:
+    """
+    Параметры:
+    - value: исходное значение поля из JSON-конфига.
+
+    Что делает:
+    - Преобразует значение в строку и раскрывает `${VAR}`/`$VAR` через переменные окружения.
+
+    Выходные данные:
+    - Строка с подставленными env-переменными.
+    """
+    return os.path.expandvars(str(value or "")).strip()
 
 
 def _now_iso() -> str:
@@ -110,7 +125,7 @@ def _normalize_aliases(raw: Dict[str, Any], model: str, backend_model: str) -> L
     extra_aliases = raw.get("aliases") or []
     if isinstance(extra_aliases, list):
         for alias in extra_aliases:
-            alias_str = str(alias or "").strip()
+            alias_str = _expand_env(alias)
             if alias_str:
                 aliases.add(alias_str)
     return sorted(aliases)
@@ -173,16 +188,16 @@ def _normalize_entry(raw: Dict[str, Any]) -> Dict[str, Any] | None:
     Выходные данные:
     - Нормализованный словарь модели или `None`.
     """
-    model = str(raw.get("model") or raw.get("public_model") or "").strip()
+    model = _expand_env(raw.get("model") or raw.get("public_model"))
     if not model:
         return None
 
-    backend_model = str(raw.get("backend_model") or raw.get("vllm_model") or model).strip()
+    backend_model = _expand_env(raw.get("backend_model") or raw.get("vllm_model") or model)
     model_type = str(raw.get("type") or raw.get("model_type") or "chat").strip().lower()
     if model_type not in _ALLOWED_TYPES:
         return None
 
-    base_url = str(raw.get("base_url") or VLLM_BASE_URL).strip().rstrip("/")
+    base_url = _expand_env(raw.get("base_url") or VLLM_BASE_URL).rstrip("/")
     modality = str(raw.get("modality") or "llm").strip().lower()
     vision_supported = _coerce_bool(raw.get("vision_supported"), fallback=(modality == "vl"))
 
