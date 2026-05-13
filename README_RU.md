@@ -20,6 +20,7 @@
 - `POST /api/embed`
 - `GET /api/models`
 - `GET /api/tags`
+- `GET /api/queue/status` — состояние очереди запросов к upstream
 
 Совместимость с reranker API:
 - `POST /api/reranker/rerank/v1`
@@ -78,14 +79,32 @@
 2. Установите зависимости.
 3. Запустите сервис.
 
-Команды:
+С uv (рекомендуется):
 ```bash
-pip install -r requirements.txt
+uv sync
+uvicorn app:app --host 0.0.0.0 --port 11435
+```
+
+Или через pip:
+```bash
+pip install .
 uvicorn app:app --host 0.0.0.0 --port 11435
 ```
 
 После запуска откройте:
 - `http://127.0.0.1:11435/docs`
+
+## 7.1 Запуск через Docker Compose (с Redis)
+```bash
+docker compose up -d --build
+```
+Redis запускается автоматически и подключается как источник live-метрик очереди.
+
+## 7.2 Запуск standalone Docker (без Redis)
+```bash
+docker build -t lite-proxy .
+docker run --rm -p 11435:11435 -e VLLM_BASE_URL=http://host.docker.internal:8010/v1 lite-proxy
+```
 
 ## 8. Быстрая проверка, что все работает
 ### 8.1 Проверка списка моделей
@@ -93,7 +112,20 @@ uvicorn app:app --host 0.0.0.0 --port 11435
 curl -s http://127.0.0.1:11435/api/models | jq
 ```
 
-### 8.2 Проверка chat
+### 8.2 Проверка очереди
+```bash
+curl -s http://127.0.0.1:11435/api/queue/status | jq
+```
+Ответ:
+```json
+{
+  "chat":       { "max_concurrent": 8, "active": 0, "waiting": 0, "free_slots": 8 },
+  "embeddings": { "max_concurrent": 8, "active": 0, "waiting": 0, "free_slots": 8 },
+  "reranker":   { "max_concurrent": 8, "active": 0, "waiting": 0, "free_slots": 8 }
+}
+```
+
+### 8.3 Проверка chat
 ```bash
 curl -s http://127.0.0.1:11435/api/chat \
   -H 'content-type: application/json' \
@@ -103,7 +135,7 @@ curl -s http://127.0.0.1:11435/api/chat \
   }' | jq
 ```
 
-### 8.3 Проверка embed
+### 8.4 Проверка embed
 ```bash
 curl -s http://127.0.0.1:11435/api/embed \
   -H 'content-type: application/json' \
@@ -113,7 +145,7 @@ curl -s http://127.0.0.1:11435/api/embed \
   }' | jq
 ```
 
-### 8.4 Проверка rerank
+### 8.5 Проверка rerank
 ```bash
 curl -s http://127.0.0.1:11435/api/reranker/rerank/v1 \
   -H 'content-type: application/json' \
@@ -145,7 +177,13 @@ curl -s http://127.0.0.1:11435/api/reranker/rerank/v1 \
 - сократите входной текст
 - проверьте `max_context_tokens` и `min_context_headroom`
 
+5. Запросы зависают / долго ждут ответа:
+- проверьте `/api/queue/status` — если `waiting > 0`, значит все слоты заняты
+- увеличьте `MAX_CONCURRENT_PER_TYPE` в `.env` (дефолт: `8`)
+- или добавьте ещё одну инстанцию vLLM
+
 ## 10. Что важно помнить
 - Этот сервис специально упрощен для локального использования.
 - Не добавляйте сюда тяжелую логику статистики/БД, если цель остаться в lite-режиме.
-- Сначала проверяйте `/api/models`, потом уже chat/embed/rerank.
+- Сначала проверяйте `/api/models` и `/api/queue/status`, потом уже chat/embed/rerank.
+- Зависимости управляются через `pyproject.toml` (uv), `requirements.txt` больше не используется.

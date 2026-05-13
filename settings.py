@@ -1,69 +1,93 @@
-import os
-
 import httpx
-from dotenv import load_dotenv
+from pydantic import AliasChoices, Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-load_dotenv()
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Upstream vLLM base URL (trailing slash is stripped automatically).
+    vllm_base_url: str = Field(default="http://localhost:8010/v1")
+
+    # Model config source: JSON file path or inline JSON string.
+    lite_model_config_file: str = Field(default="models.json")
+    lite_model_config_json: str = Field(default="")
+
+    # Public default model names; accept legacy env-var aliases.
+    default_chat_model: str = Field(
+        default="lite-chat",
+        validation_alias=AliasChoices("DEFAULT_CHAT_MODEL", "MODEL_CHAT"),
+    )
+    default_embed_model: str = Field(
+        default="lite-embed",
+        validation_alias=AliasChoices("DEFAULT_EMBED_MODEL", "MODEL_EMBED"),
+    )
+    default_rerank_model: str = Field(
+        default="lite-rerank",
+        validation_alias=AliasChoices("DEFAULT_RERANK_MODEL", "MODEL_RERANK"),
+    )
+
+    # Token budget defaults.
+    default_max_tokens: int = Field(default=1024)
+    max_context_tokens: int = Field(default=8192)
+    min_context_headroom: int = Field(default=128)
+
+    # HTTP client tuning.
+    upstream_timeout_seconds: float = Field(default=20.0)
+    upstream_max_connections: int = Field(default=200)
+    upstream_max_keepalive_connections: int = Field(default=50)
+    upstream_keepalive_expiry_seconds: float = Field(default=30.0)
+
+    # Retry policy.
+    upstream_retry_attempts: int = Field(default=2)
+    upstream_retry_base_delay_seconds: float = Field(default=0.2)
+    upstream_retry_jitter_seconds: float = Field(default=0.1)
+    # Stored as a comma-separated string; parsed by `retry_status_codes` property.
+    upstream_retry_status_codes: str = Field(default="502,503,504")
+
+    # Concurrency limiter — caps simultaneous in-flight upstream requests
+    # per model type (chat / embeddings / reranker) independently.
+    # Excess requests queue in the event-loop (FIFO) rather than being rejected.
+    max_concurrent_per_type: int = Field(default=8)
+
+    # Optional Redis URL for cross-instance queue metrics.
+    # Leave empty to run limiter without Redis (local semaphore only).
+    redis_url: str = Field(default="")
+
+    @field_validator("vllm_base_url", mode="after")
+    @classmethod
+    def _strip_trailing_slash(cls, v: str) -> str:
+        return v.strip().rstrip("/")
+
+    @property
+    def retry_status_codes(self) -> set[int]:
+        codes: set[int] = set()
+        for part in self.upstream_retry_status_codes.split(","):
+            part = part.strip()
+            try:
+                code = int(part)
+                if 100 <= code <= 599:
+                    codes.add(code)
+            except ValueError:
+                pass
+        return codes or {502, 503, 504}
+
+    @property
+    def http_timeout(self) -> httpx.Timeout:
+        return httpx.Timeout(timeout=self.upstream_timeout_seconds)
+
+    @property
+    def http_limits(self) -> httpx.Limits:
+        return httpx.Limits(
+            max_connections=self.upstream_max_connections,
+            max_keepalive_connections=self.upstream_max_keepalive_connections,
+            keepalive_expiry=self.upstream_keepalive_expiry_seconds,
+        )
 
 
-def _parse_retry_status_codes(raw: str) -> set[int]:
-    """
-    Параметры:
-    - raw: строка со списком HTTP-кодов через запятую.
+settings = Settings()
 
-    Что делает:
-    - Парсит строку в множество валидных HTTP-кодов (100..599).
-    - Игнорирует пустые и нечисловые значения.
-    - Возвращает дефолтный набор retry-кодов, если после парсинга список пуст.
-
-    Выходные данные:
-    - Множество HTTP-кодов для retry-логики.
-    """
-    codes: set[int] = set()
-    for part in (raw or "").split(","):
-        part = part.strip()
-        if not part:
-            continue
-        try:
-            code = int(part)
-        except ValueError:
-            continue
-        if 100 <= code <= 599:
-            codes.add(code)
-    return codes or {502, 503, 504}
-
-
-VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://localhost:8010/v1").strip().rstrip("/")
-
-# Preferred source: JSON file with model routes (for example ./models.json).
-LITE_MODEL_CONFIG_FILE = os.getenv("LITE_MODEL_CONFIG_FILE", "models.json").strip()
-
-# Optional fallback: inline JSON config for model routing in lite mode.
-LITE_MODEL_CONFIG_JSON = os.getenv("LITE_MODEL_CONFIG_JSON", "").strip()
-
-DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", os.getenv("MODEL_CHAT", "lite-chat"))
-DEFAULT_EMBED_MODEL = os.getenv("DEFAULT_EMBED_MODEL", os.getenv("MODEL_EMBED", "lite-embed"))
-DEFAULT_RERANK_MODEL = os.getenv("DEFAULT_RERANK_MODEL", os.getenv("MODEL_RERANK", "lite-rerank"))
-
-DEFAULT_MAX_TOKENS = int(os.getenv("DEFAULT_MAX_TOKENS", "1024"))
-MAX_CONTEXT_TOKENS = int(os.getenv("MAX_CONTEXT_TOKENS", "8192"))
-MIN_CONTEXT_HEADROOM = int(os.getenv("MIN_CONTEXT_HEADROOM", "128"))
-
-UPSTREAM_TIMEOUT_SECONDS = float(os.getenv("UPSTREAM_TIMEOUT_SECONDS", "20"))
-UPSTREAM_MAX_CONNECTIONS = int(os.getenv("UPSTREAM_MAX_CONNECTIONS", "200"))
-UPSTREAM_MAX_KEEPALIVE_CONNECTIONS = int(os.getenv("UPSTREAM_MAX_KEEPALIVE_CONNECTIONS", "50"))
-UPSTREAM_KEEPALIVE_EXPIRY_SECONDS = float(os.getenv("UPSTREAM_KEEPALIVE_EXPIRY_SECONDS", "30"))
-UPSTREAM_RETRY_ATTEMPTS = int(os.getenv("UPSTREAM_RETRY_ATTEMPTS", "2"))
-UPSTREAM_RETRY_BASE_DELAY_SECONDS = float(os.getenv("UPSTREAM_RETRY_BASE_DELAY_SECONDS", "0.2"))
-UPSTREAM_RETRY_JITTER_SECONDS = float(os.getenv("UPSTREAM_RETRY_JITTER_SECONDS", "0.1"))
-UPSTREAM_RETRY_STATUS_CODES = _parse_retry_status_codes(
-    os.getenv("UPSTREAM_RETRY_STATUS_CODES", "502,503,504")
-)
-
-UPSTREAM_HTTP_TIMEOUT = httpx.Timeout(timeout=UPSTREAM_TIMEOUT_SECONDS)
-UPSTREAM_HTTP_LIMITS = httpx.Limits(
-    max_connections=UPSTREAM_MAX_CONNECTIONS,
-    max_keepalive_connections=UPSTREAM_MAX_KEEPALIVE_CONNECTIONS,
-    keepalive_expiry=UPSTREAM_KEEPALIVE_EXPIRY_SECONDS,
-)

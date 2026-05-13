@@ -1,9 +1,35 @@
+import copy
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, TypedDict
 
-from settings import DEFAULT_MAX_TOKENS, MAX_CONTEXT_TOKENS, MIN_CONTEXT_HEADROOM
+from settings import settings
+
+
+def inline_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Resolve $defs $refs inline so Swagger's resolver can find them in openapi_extra."""
+    schema = copy.deepcopy(schema)
+    defs = schema.pop("$defs", {})
+
+    def resolve(obj: Any) -> Any:
+        if isinstance(obj, dict):
+            if tuple(obj) == ("$ref",):
+                ref: str = obj["$ref"]
+                if ref.startswith("#/$defs/"):
+                    name = ref[len("#/$defs/"):]
+                    if name in defs:
+                        return resolve(copy.deepcopy(defs[name]))
+            return {k: resolve(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [resolve(item) for item in obj]
+        return obj
+
+    return resolve(schema)
+
+
+class TokenBudget(TypedDict):
+    resolved_max_tokens: int
 
 
 def now_iso() -> str:
@@ -50,7 +76,7 @@ def estimate_input_tokens_from_text(text: str) -> int:
     return max(1, len(text) // 4)
 
 
-def estimate_chat_input_tokens(messages: List[Dict[str, Any]]) -> int:
+def estimate_chat_input_tokens(messages: list[dict[str, Any]]) -> int:
     """
     Параметры:
     - messages: список chat-сообщений в Ollama/OpenAI-like формате.
@@ -75,12 +101,12 @@ def estimate_chat_input_tokens(messages: List[Dict[str, Any]]) -> int:
 
 
 def analyze_max_tokens_budget(
-    body: Dict[str, Any],
+    body: dict[str, Any],
     estimated_input_tokens: int = 0,
     max_context_tokens: int | None = None,
     min_context_headroom: int | None = None,
     default_max_tokens: int | None = None,
-) -> Dict[str, Any]:
+) -> TokenBudget:
     """
     Параметры:
     - body: тело запроса клиента.
@@ -97,7 +123,8 @@ def analyze_max_tokens_budget(
     Выходные данные:
     - Словарь с ключом `resolved_max_tokens`.
     """
-    options = body.get("options") if isinstance(body.get("options"), dict) else {}
+    _opts = body.get("options")
+    options: dict[str, Any] = _opts if isinstance(_opts, dict) else {}
 
     requested_ctx_raw = body.get("num_ctx")
     if requested_ctx_raw is None:
@@ -121,14 +148,14 @@ def analyze_max_tokens_budget(
         except (TypeError, ValueError):
             requested_value = None
 
-    model_context_limit = max(1, int(max_context_tokens or MAX_CONTEXT_TOKENS))
+    model_context_limit = max(1, int(max_context_tokens or settings.max_context_tokens))
     if requested_context_value is None:
         resolved_context = model_context_limit
     else:
         resolved_context = min(requested_context_value, model_context_limit)
 
-    resolved_headroom = max(0, int(min_context_headroom or MIN_CONTEXT_HEADROOM))
-    resolved_default = max(1, int(default_max_tokens or DEFAULT_MAX_TOKENS))
+    resolved_headroom = max(0, int(min_context_headroom or settings.min_context_headroom))
+    resolved_default = max(1, int(default_max_tokens or settings.default_max_tokens))
 
     available_output_tokens = max(1, resolved_context - max(0, estimated_input_tokens) - resolved_headroom)
     hard_cap = available_output_tokens
@@ -143,7 +170,7 @@ def analyze_max_tokens_budget(
     }
 
 
-def extract_chat_text(data: Dict[str, Any]) -> str:
+def extract_chat_text(data: dict[str, Any]) -> str:
     """
     Параметры:
     - data: JSON-ответ upstream chat/completions.
@@ -166,7 +193,7 @@ def extract_chat_text(data: Dict[str, Any]) -> str:
     return ""
 
 
-def extract_finish_reason(data: Dict[str, Any]) -> str:
+def extract_finish_reason(data: dict[str, Any]) -> str:
     """
     Параметры:
     - data: JSON-ответ upstream chat/completions.
@@ -225,8 +252,9 @@ def ollama_response(
     content: str,
     start_ns: int,
     done_reason: str = "stop",
-    usage: Dict[str, Any] | None = None,
-) -> Dict[str, Any]:
+    usage: dict[str, Any] | None = None,
+    logprobs: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Параметры:
     - model: публичное имя модели.
@@ -234,10 +262,12 @@ def ollama_response(
     - start_ns: timestamp старта обработки в наносекундах.
     - done_reason: причина завершения генерации.
     - usage: usage-объект upstream (`prompt_tokens`, `completion_tokens`).
+    - logprobs: logprobs-объект из choices[0].logprobs (если запрошены).
 
     Что делает:
     - Формирует ответ в Ollama-style формате.
     - Маппит usage из vLLM в `prompt_eval_count` и `eval_count`.
+    - Включает logprobs в ответ, если они были запрошены.
 
     Выходные данные:
     - Словарь ответа в формате Ollama.
@@ -247,9 +277,27 @@ def ollama_response(
     prompt_eval_count = _coerce_non_negative_int(usage_obj.get("prompt_tokens"), default=0)
     eval_count = _coerce_non_negative_int(usage_obj.get("completion_tokens"), default=0)
 
-    return {
+    choice: dict[str, Any] = {
+        "index": 0,
+        "message": {"role": "assistant", "content": content},
+        "finish_reason": done_reason,
+    }
+    if logprobs is not None:
+        choice["logprobs"] = logprobs
+
+    result: dict[str, Any] = {
+        # OpenAI-compatible fields (for n8n and other OpenAI-style clients)
+        "object": "chat.completion",
+        "choices": [choice],
+        "usage": {
+            "prompt_tokens": prompt_eval_count,
+            "completion_tokens": eval_count,
+            "total_tokens": prompt_eval_count + eval_count,
+        },
+        # Ollama-compatible fields
         "model": model,
         "created_at": now_iso(),
+        "message": {"role": "assistant", "content": content},
         "response": content,
         "done": True,
         "done_reason": done_reason,
@@ -260,3 +308,6 @@ def ollama_response(
         "eval_count": eval_count,
         "eval_duration": 0,
     }
+    if logprobs is not None:
+        result["logprobs"] = logprobs
+    return result

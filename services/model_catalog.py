@@ -5,23 +5,35 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Final, Iterable, Literal, TypedDict
 
 from fastapi import HTTPException
 
-from settings import (
-    DEFAULT_CHAT_MODEL,
-    DEFAULT_EMBED_MODEL,
-    DEFAULT_MAX_TOKENS,
-    DEFAULT_RERANK_MODEL,
-    LITE_MODEL_CONFIG_FILE,
-    LITE_MODEL_CONFIG_JSON,
-    MAX_CONTEXT_TOKENS,
-    MIN_CONTEXT_HEADROOM,
-    VLLM_BASE_URL,
-)
+from settings import settings
 
-_ALLOWED_TYPES = {"chat", "embeddings", "reranker"}
+ModelType = Literal["chat", "embeddings", "reranker"]
+
+
+class ModelEntry(TypedDict):
+    id: int
+    model: str
+    model_vllm: str
+    type: ModelType
+    modality: str
+    vision_supported: bool
+    audio_supported: bool
+    base_url: str
+    max_context_tokens: int
+    default_max_tokens: int
+    min_context_headroom: int
+    stream_supported: bool
+    reasoning_supported: bool
+    aliases: list[str]
+    status: str
+    detail: str
+
+
+_ALLOWED_TYPES: Final[frozenset[ModelType]] = frozenset({"chat", "embeddings", "reranker"})
 
 
 def _expand_env(value: Any) -> str:
@@ -87,28 +99,7 @@ def _guess_family(model_name: str) -> str:
     return "unknown"
 
 
-def _extract_quantization_level(model_name: str) -> str:
-    """
-    Параметры:
-    - model_name: имя модели.
-
-    Что делает:
-    - Пытается извлечь признак квантования из имени модели.
-
-    Выходные данные:
-    - Строка уровня квантования или пустая строка.
-    """
-    upper = model_name.upper()
-    if "Q4_K_M" in upper:
-        return "Q4_K_M"
-    if "Q6_K" in upper:
-        return "Q6_K"
-    if "Q8" in upper:
-        return "Q8"
-    return ""
-
-
-def _normalize_aliases(raw: Dict[str, Any], model: str, backend_model: str) -> List[str]:
+def _normalize_aliases(raw: dict[str, Any], model: str, backend_model: str) -> list[str]:
     """
     Параметры:
     - raw: сырая конфигурация модели.
@@ -176,7 +167,7 @@ def _coerce_bool(raw: Any, fallback: bool = False) -> bool:
     return fallback
 
 
-def _normalize_entry(raw: Dict[str, Any]) -> Dict[str, Any] | None:
+def _normalize_entry(raw: dict[str, Any]) -> ModelEntry | None:
     """
     Параметры:
     - raw: сырая запись модели из JSON-конфига.
@@ -193,20 +184,21 @@ def _normalize_entry(raw: Dict[str, Any]) -> Dict[str, Any] | None:
         return None
 
     backend_model = _expand_env(raw.get("backend_model") or raw.get("vllm_model") or model)
-    model_type = str(raw.get("type") or raw.get("model_type") or "chat").strip().lower()
-    if model_type not in _ALLOWED_TYPES:
+    model_type_raw = str(raw.get("type") or raw.get("model_type") or "chat").strip().lower()
+    if model_type_raw not in _ALLOWED_TYPES:
         return None
+    model_type: ModelType = model_type_raw  # type: ignore[assignment]
 
-    base_url = _expand_env(raw.get("base_url") or VLLM_BASE_URL).rstrip("/")
+    base_url = _expand_env(raw.get("base_url") or settings.vllm_base_url).rstrip("/")
     modality = str(raw.get("modality") or "llm").strip().lower()
     vision_supported = _coerce_bool(raw.get("vision_supported"), fallback=(modality == "vl"))
 
     per_model_max_tokens = _coerce_int(
         raw.get("max_tokens", raw.get("default_max_tokens")),
-        DEFAULT_MAX_TOKENS,
+        settings.default_max_tokens,
     )
 
-    normalized = {
+    normalized: ModelEntry = {
         "id": 0,
         "model": model,
         "model_vllm": backend_model,
@@ -215,19 +207,19 @@ def _normalize_entry(raw: Dict[str, Any]) -> Dict[str, Any] | None:
         "vision_supported": vision_supported,
         "audio_supported": _coerce_bool(raw.get("audio_supported"), fallback=False),
         "base_url": base_url,
-        "max_context_tokens": _coerce_int(raw.get("max_context_tokens"), MAX_CONTEXT_TOKENS),
+        "max_context_tokens": _coerce_int(raw.get("max_context_tokens"), settings.max_context_tokens),
         "default_max_tokens": per_model_max_tokens,
-        "min_context_headroom": _coerce_int(raw.get("min_context_headroom"), MIN_CONTEXT_HEADROOM, min_value=0),
+        "min_context_headroom": _coerce_int(raw.get("min_context_headroom"), settings.min_context_headroom, min_value=0),
         "stream_supported": _coerce_bool(raw.get("stream_supported"), fallback=False),
         "reasoning_supported": _coerce_bool(raw.get("reasoning_supported"), fallback=False),
+        "aliases": _normalize_aliases(raw, model, backend_model),
         "status": "available",
         "detail": "",
     }
-    normalized["aliases"] = _normalize_aliases(raw, model, backend_model)
     return normalized
 
 
-def _default_entry(model: str, model_type: str) -> Dict[str, Any]:
+def _default_entry(model: str, model_type: ModelType) -> ModelEntry:
     """
     Параметры:
     - model: имя модели.
@@ -239,27 +231,27 @@ def _default_entry(model: str, model_type: str) -> Dict[str, Any]:
     Выходные данные:
     - Словарь конфигурации модели.
     """
-    return {
-        "id": 0,
-        "model": model,
-        "model_vllm": model,
-        "type": model_type,
-        "modality": "llm",
-        "vision_supported": False,
-        "audio_supported": False,
-        "base_url": VLLM_BASE_URL,
-        "max_context_tokens": MAX_CONTEXT_TOKENS,
-        "default_max_tokens": DEFAULT_MAX_TOKENS,
-        "min_context_headroom": MIN_CONTEXT_HEADROOM,
-        "stream_supported": False,
-        "reasoning_supported": False,
-        "aliases": [model],
-        "status": "available",
-        "detail": "",
-    }
+    return ModelEntry(
+        id=0,
+        model=model,
+        model_vllm=model,
+        type=model_type,
+        modality="llm",
+        vision_supported=False,
+        audio_supported=False,
+        base_url=settings.vllm_base_url,
+        max_context_tokens=settings.max_context_tokens,
+        default_max_tokens=settings.default_max_tokens,
+        min_context_headroom=settings.min_context_headroom,
+        stream_supported=False,
+        reasoning_supported=False,
+        aliases=[model],
+        status="available",
+        detail="",
+    )
 
 
-def _parse_models_json(raw_json: str, source_name: str) -> Iterable[Dict[str, Any]]:
+def _parse_models_json(raw_json: str, source_name: str) -> Iterable[dict[str, Any]]:
     """
     Параметры:
     - raw_json: JSON-строка с моделями.
@@ -283,7 +275,7 @@ def _parse_models_json(raw_json: str, source_name: str) -> Iterable[Dict[str, An
     raise RuntimeError(f"{source_name} must be a JSON array or an object with key 'models'")
 
 
-def _parse_raw_models() -> Iterable[Dict[str, Any]]:
+def _parse_raw_models() -> Iterable[dict[str, Any]]:
     """
     Параметры:
     - отсутствуют.
@@ -295,7 +287,7 @@ def _parse_raw_models() -> Iterable[Dict[str, Any]]:
     Выходные данные:
     - Итерируемая коллекция сырых записей моделей.
     """
-    config_file = str(LITE_MODEL_CONFIG_FILE or "").strip()
+    config_file = str(settings.lite_model_config_file or "").strip()
     if config_file:
         cfg_path = Path(config_file)
         if not cfg_path.is_absolute():
@@ -304,14 +296,14 @@ def _parse_raw_models() -> Iterable[Dict[str, Any]]:
             raw_json = cfg_path.read_text(encoding="utf-8")
             return _parse_models_json(raw_json, f"LITE_MODEL_CONFIG_FILE ({cfg_path})")
 
-    if LITE_MODEL_CONFIG_JSON:
-        return _parse_models_json(LITE_MODEL_CONFIG_JSON, "LITE_MODEL_CONFIG_JSON")
+    if settings.lite_model_config_json:
+        return _parse_models_json(settings.lite_model_config_json, "LITE_MODEL_CONFIG_JSON")
 
     return []
 
 
 @lru_cache(maxsize=1)
-def _load_models_cached() -> tuple[Dict[str, Any], ...]:
+def _load_models_cached() -> tuple[ModelEntry, ...]:
     """
     Параметры:
     - отсутствуют.
@@ -323,7 +315,7 @@ def _load_models_cached() -> tuple[Dict[str, Any], ...]:
     Выходные данные:
     - Кортеж нормализованных конфигураций моделей.
     """
-    models: List[Dict[str, Any]] = []
+    models: list[ModelEntry] = []
 
     for raw in _parse_raw_models():
         normalized = _normalize_entry(raw)
@@ -332,11 +324,11 @@ def _load_models_cached() -> tuple[Dict[str, Any], ...]:
 
     existing_types = {item["type"] for item in models}
     if "chat" not in existing_types:
-        models.append(_default_entry(DEFAULT_CHAT_MODEL, "chat"))
+        models.append(_default_entry(settings.default_chat_model, "chat"))
     if "embeddings" not in existing_types:
-        models.append(_default_entry(DEFAULT_EMBED_MODEL, "embeddings"))
+        models.append(_default_entry(settings.default_embed_model, "embeddings"))
     if "reranker" not in existing_types:
-        models.append(_default_entry(DEFAULT_RERANK_MODEL, "reranker"))
+        models.append(_default_entry(settings.default_rerank_model, "reranker"))
 
     for index, item in enumerate(models, start=1):
         item["id"] = index
@@ -344,7 +336,7 @@ def _load_models_cached() -> tuple[Dict[str, Any], ...]:
     return tuple(models)
 
 
-def get_models_snapshot() -> List[Dict[str, Any]]:
+def get_models_snapshot() -> list[ModelEntry]:
     """
     Параметры:
     - отсутствуют.
@@ -372,7 +364,7 @@ def refresh_model_catalog() -> None:
     _load_models_cached.cache_clear()
 
 
-def resolve_target(requested_model: str | None, expected_types: set[str]) -> Dict[str, Any]:
+def resolve_target(requested_model: str | None, expected_types: set[ModelType]) -> ModelEntry:
     """
     Параметры:
     - requested_model: имя модели из запроса (может быть `None`).
@@ -391,7 +383,7 @@ def resolve_target(requested_model: str | None, expected_types: set[str]) -> Dic
         allowed_label = ", ".join(sorted(expected_types))
         raise HTTPException(status_code=503, detail=f"no models configured for type: {allowed_label}")
 
-    by_alias: Dict[str, Dict[str, Any]] = {}
+    by_alias: dict[str, ModelEntry] = {}
     for item in allowed:
         by_alias[str(item.get("model", ""))] = item
         by_alias[str(item.get("model_vllm", ""))] = item
@@ -418,7 +410,7 @@ def resolve_target(requested_model: str | None, expected_types: set[str]) -> Dic
     return resolved
 
 
-def to_ollama_tag_item(item: Dict[str, Any]) -> Dict[str, Any]:
+def to_ollama_tag_item(item: ModelEntry) -> dict[str, Any]:
     """
     Параметры:
     - item: словарь внутренней конфигурации модели.
@@ -432,14 +424,7 @@ def to_ollama_tag_item(item: Dict[str, Any]) -> Dict[str, Any]:
     model_name = str(item.get("model") or "").strip()
     backend_name = str(item.get("model_vllm") or model_name).strip()
     model_type = str(item.get("type") or "")
-
-    quantization = _extract_quantization_level(backend_name or model_name)
-    is_gguf = bool(quantization)
     modality = str(item.get("modality") or "llm")
-    if modality == "vl":
-        fmt = "vl"
-    else:
-        fmt = "gguf" if is_gguf else "vllm"
 
     return {
         "name": model_name,
@@ -449,11 +434,11 @@ def to_ollama_tag_item(item: Dict[str, Any]) -> Dict[str, Any]:
         "digest": _stable_digest(f"{model_name}|{backend_name}|{model_type}"),
         "details": {
             "parent_model": backend_name,
-            "format": fmt,
+            "format": "vl" if modality == "vl" else "vllm",
             "family": _guess_family(backend_name or model_name),
             "families": [_guess_family(backend_name or model_name)],
             "parameter_size": "",
-            "quantization_level": quantization if is_gguf else "",
+            "quantization_level": "",
             "modality": modality,
             "vision_supported": bool(item.get("vision_supported", False)),
             "audio_supported": bool(item.get("audio_supported", False)),

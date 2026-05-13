@@ -1,96 +1,14 @@
 services:
-  vllm-embed:
-    image: vllm/vllm-openai:latest
-    container_name: vllm-embed
+  redis:
+    image: redis:7-alpine
+    container_name: lite-proxy-redis
     restart: unless-stopped
-    command: >
-      --model ${MODEL_EMBED}
-      --host 0.0.0.0
-      --port 8011
-      --dtype auto
-      --gpu-memory-utilization 0.20
-      --max-model-len 8192
-      --max-num-seqs 4
-      --runner pooling
-    environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-    ports:
-      - "8011:8011"
+    command: redis-server --save "" --appendonly no
     healthcheck:
-      test: ["CMD", "python3", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 8011), 3); s.close()"]
-      interval: 10s
-      timeout: 5s
-      retries: 60
-      start_period: 300s
-    ipc: host
-    gpus: all
-    volumes:
-      - ./.cache/huggingface:/root/.cache/huggingface
-
-  vllm-reranker:
-    image: vllm/vllm-openai:latest
-    container_name: vllm-reranker
-    restart: unless-stopped
-    command: >
-      --model ${MODEL_RERANK}
-      --host 0.0.0.0
-      --port 8012
-      --dtype float16
-      --gpu-memory-utilization 0.12
-      --max-model-len 4096
-      --max-num-seqs 4
-      --hf_overrides '{"architectures": ["Qwen3ForSequenceClassification"],"classifier_from_token": ["no", "yes"],"is_original_qwen3_reranker": true}'
-      --enforce-eager
-      --runner pooling
-      --chat-template examples/pooling/score/template/qwen3_reranker.jinja
-    depends_on:
-      vllm-embed:
-        condition: service_healthy
-    environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-    ports:
-      - "8012:8012"
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 8012), 3); s.close()"]
-      interval: 10s
-      timeout: 5s
-      retries: 60
-      start_period: 300s
-    ipc: host
-    gpus: all
-    volumes:
-      - ./.cache/huggingface:/root/.cache/huggingface
-
-  vllm-chat:
-    image: vllm/vllm-openai:latest
-    container_name: vllm-chat
-    restart: unless-stopped
-    command: >
-      --model ${MODEL_CHAT}
-      --host 0.0.0.0
-      --port 8013
-      --dtype float16
-      --gpu-memory-utilization 0.70
-      --max-model-len 32768
-      --max-num-seqs 4
-      --trust-remote-code
-    depends_on:
-      vllm-reranker:
-        condition: service_healthy
-    environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-    ports:
-      - "8013:8013"
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 8013), 3); s.close()"]
-      interval: 10s
-      timeout: 5s
-      retries: 90
-      start_period: 600s
-    ipc: host
-    gpus: all
-    volumes:
-      - ./.cache/huggingface:/root/.cache/huggingface
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   lite-proxy:
     build:
@@ -98,20 +16,20 @@ services:
     container_name: lite-proxy
     restart: unless-stopped
     depends_on:
-      vllm-chat:
+      redis:
         condition: service_healthy
     env_file:
       - ./.env
     environment:
-      - VLLM_BASE_URL=http://vllm-chat:8013/v1
-      - LITE_MODEL_CONFIG_FILE=models.docker.json
+      - LITE_MODEL_CONFIG_FILE=models.json
       - UPSTREAM_TIMEOUT_SECONDS=120
+      - REDIS_URL=redis://redis:6379
     ports:
-      - "11435:11435"
+      - "11434:11434"
     volumes:
-      - ./models.docker.json:/app/models.docker.json:ro
+      - ./models.json:/app/models.json:ro
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:11435/api/models', timeout=3)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:11434/api/models', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 20

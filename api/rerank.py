@@ -1,16 +1,18 @@
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
+from api.common import inline_schema
 from constants import ERR_NO_RERANK_MODELS, RERANK_V1_PATH, RERANK_V2_PATH, SCORE_V1_PATH
-from schemas import RerankRequestModel, ScoreRequestModel
-from services.model_catalog import resolve_target
+from schemas import RerankRequestModel, RerankResponse, ScoreRequestModel, ScoreResponse
+from services.model_catalog import ModelEntry, resolve_target
+from services.request_parser import read_request_body_as_dict
 from services.upstream import post_json_to
 
 router = APIRouter(tags=["rerank"])
 
 
-def _ensure_rerank_temperature(payload: Dict[str, Any]) -> Dict[str, Any]:
+def _ensure_rerank_temperature(payload: dict[str, Any]) -> dict[str, Any]:
     """
     Параметры:
     - payload: входной rerank/score payload.
@@ -45,7 +47,7 @@ def _normalize_reranker_base_url(base_url: str) -> str:
     return normalized
 
 
-def _validate_score_payload(payload: Dict[str, Any]) -> None:
+def _validate_score_payload(payload: dict[str, Any]) -> None:
     """
     Параметры:
     - payload: тело score-запроса.
@@ -72,7 +74,7 @@ def _validate_score_payload(payload: Dict[str, Any]) -> None:
     )
 
 
-async def _resolve_reranker_target(requested_model: str | None) -> Dict[str, Any]:
+async def _resolve_reranker_target(requested_model: str | None) -> ModelEntry:
     """
     Параметры:
     - requested_model: публичное имя модели из запроса.
@@ -92,7 +94,7 @@ async def _resolve_reranker_target(requested_model: str | None) -> Dict[str, Any
         raise
 
 
-async def _rerank_impl(request: Request, payload: Dict[str, Any], path: str) -> Dict[str, Any]:
+async def _rerank_impl(request: Request, payload: dict[str, Any], path: str) -> dict[str, Any]:
     """
     Параметры:
     - request: входящий HTTP-запрос.
@@ -119,11 +121,59 @@ async def _rerank_impl(request: Request, payload: Dict[str, Any], path: str) -> 
     request.state.upstream = target.get("base_url", "")
 
     upstream_base = _normalize_reranker_base_url(target["base_url"])
-    return await post_json_to(upstream_base, path, upstream_payload)
+    return await post_json_to(upstream_base, path, upstream_payload, model_type=target["type"])
 
 
-@router.post("/api/reranker/rerank/v1", summary="Rerank (v1)")
-async def api_rerank_v1(request: Request, payload: RerankRequestModel) -> Dict[str, Any]:
+@router.post(
+    "/api/reranker/rerank/v1",
+    summary="Rerank (v1)",
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": inline_schema(RerankRequestModel.model_json_schema()),
+                    "examples": {
+                        "Без logprobs": {
+                            "summary": "Обычный запрос",
+                            "value": {
+                                "model": "qwen3-reranker-4b",
+                                "query": "Что такое квантовая запутанность?",
+                                "documents": [
+                                    "Квантовая запутанность — явление, при котором состояния двух частиц взаимозависимы.",
+                                    "Фотосинтез — процесс преобразования световой энергии в химическую у растений.",
+                                    "Принцип суперпозиции описывает нахождение квантовой системы в нескольких состояниях одновременно.",
+                                ],
+                                "top_n": 2,
+                            },
+                        },
+                        "С logprobs": {
+                            "summary": "С логитами (logprobs)",
+                            "value": {
+                                "model": "qwen3-reranker-4b",
+                                "query": "Что такое квантовая запутанность?",
+                                "documents": [
+                                    "Квантовая запутанность — явление, при котором состояния двух частиц взаимозависимы.",
+                                    "Фотосинтез — процесс преобразования световой энергии в химическую у растений.",
+                                ],
+                                "top_n": 2,
+                                "logprobs": True,
+                                "top_logprobs": 2,
+                            },
+                        },
+                    },
+                }
+            },
+            "required": True,
+        },
+        "responses": {
+            "200": {
+                "description": "Successful Response",
+                "content": {"application/json": {"schema": inline_schema(RerankResponse.model_json_schema())}},
+            }
+        },
+    },
+)
+async def api_rerank_v1(request: Request) -> dict[str, Any]:
     """
     Параметры:
     - request: входящий HTTP-запрос.
@@ -135,11 +185,61 @@ async def api_rerank_v1(request: Request, payload: RerankRequestModel) -> Dict[s
     Выходные данные:
     - JSON-ответ reranker.
     """
+    raw = await read_request_body_as_dict(request)
+    payload = RerankRequestModel.model_validate(raw)
     return await _rerank_impl(request, payload.model_dump(exclude_none=True), RERANK_V1_PATH)
 
 
-@router.post("/api/reranker/rerank/v2", summary="Rerank (v2)")
-async def api_rerank_v2(request: Request, payload: RerankRequestModel) -> Dict[str, Any]:
+@router.post(
+    "/api/reranker/rerank/v2",
+    summary="Rerank (v2)",
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": inline_schema(RerankRequestModel.model_json_schema()),
+                    "examples": {
+                        "Без logprobs": {
+                            "summary": "Обычный запрос",
+                            "value": {
+                                "model": "qwen3-reranker-4b",
+                                "query": "Что такое квантовая запутанность?",
+                                "documents": [
+                                    "Квантовая запутанность — явление, при котором состояния двух частиц взаимозависимы.",
+                                    "Фотосинтез — процесс преобразования световой энергии в химическую у растений.",
+                                    "Принцип суперпозиции описывает нахождение квантовой системы в нескольких состояниях одновременно.",
+                                ],
+                                "top_n": 2,
+                            },
+                        },
+                        "С logprobs": {
+                            "summary": "С логитами (logprobs)",
+                            "value": {
+                                "model": "qwen3-reranker-4b",
+                                "query": "Что такое квантовая запутанность?",
+                                "documents": [
+                                    "Квантовая запутанность — явление, при котором состояния двух частиц взаимозависимы.",
+                                    "Фотосинтез — процесс преобразования световой энергии в химическую у растений.",
+                                ],
+                                "top_n": 2,
+                                "logprobs": True,
+                                "top_logprobs": 2,
+                            },
+                        },
+                    },
+                }
+            },
+            "required": True,
+        },
+        "responses": {
+            "200": {
+                "description": "Successful Response",
+                "content": {"application/json": {"schema": inline_schema(RerankResponse.model_json_schema())}},
+            }
+        },
+    },
+)
+async def api_rerank_v2(request: Request) -> dict[str, Any]:
     """
     Параметры:
     - request: входящий HTTP-запрос.
@@ -151,11 +251,52 @@ async def api_rerank_v2(request: Request, payload: RerankRequestModel) -> Dict[s
     Выходные данные:
     - JSON-ответ reranker.
     """
+    raw = await read_request_body_as_dict(request)
+    payload = RerankRequestModel.model_validate(raw)
     return await _rerank_impl(request, payload.model_dump(exclude_none=True), RERANK_V2_PATH)
 
 
-@router.post("/api/reranker/score", summary="Score (v1)")
-async def api_reranker_score(request: Request, payload: ScoreRequestModel) -> Dict[str, Any]:
+@router.post(
+    "/api/reranker/score",
+    summary="Score (v1)",
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": inline_schema(ScoreRequestModel.model_json_schema()),
+                    "examples": {
+                        "Без logprobs": {
+                            "summary": "Обычный запрос",
+                            "value": {
+                                "model": "qwen3-reranker-4b",
+                                "text_1": "Что такое квантовая запутанность?",
+                                "text_2": "Квантовая запутанность — явление, при котором состояния двух частиц взаимозависимы.",
+                            },
+                        },
+                        "С logprobs": {
+                            "summary": "С логитами (logprobs)",
+                            "value": {
+                                "model": "qwen3-reranker-4b",
+                                "text_1": "Что такое квантовая запутанность?",
+                                "text_2": "Квантовая запутанность — явление, при котором состояния двух частиц взаимозависимы.",
+                                "logprobs": True,
+                                "top_logprobs": 2,
+                            },
+                        },
+                    },
+                }
+            },
+            "required": True,
+        },
+        "responses": {
+            "200": {
+                "description": "Successful Response",
+                "content": {"application/json": {"schema": inline_schema(ScoreResponse.model_json_schema())}},
+            }
+        },
+    },
+)
+async def api_reranker_score(request: Request) -> dict[str, Any]:
     """
     Параметры:
     - request: входящий HTTP-запрос.
@@ -167,6 +308,8 @@ async def api_reranker_score(request: Request, payload: ScoreRequestModel) -> Di
     Выходные данные:
     - JSON-ответ score endpoint.
     """
+    raw = await read_request_body_as_dict(request)
+    payload = ScoreRequestModel.model_validate(raw)
     body_data = _ensure_rerank_temperature(payload.model_dump(exclude_none=True))
     _validate_score_payload(body_data)
 

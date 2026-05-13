@@ -3,36 +3,52 @@
     "model": "${MODEL_EMBED}",
     "backend_model": "${MODEL_EMBED}",
     "type": "embeddings",
-    "base_url": "http://127.0.0.1:8011/v1",
-    "max_context_tokens": 8192,
-    "max_tokens": 8192,
+    "base_url": "http://10.77.170.200:8002/v1",
+    "max_context_tokens": 16384,
+    "max_tokens": 16384,
     "min_context_headroom": 128,
     "stream_supported": false,
     "reasoning_supported": false,
-    "aliases": ["qwen3-embedding-4b", "embed", "embedding", "qwen-embed", "qwen-embedding"]
+    "aliases": ["qwen3-embedding-4b", "embed", "embedding", "qwen-embed", "qwen-embedding", "Qwen3-Embedding-4B"]
   },
   {
     "model": "${MODEL_RERANK}",
     "backend_model": "${MODEL_RERANK}",
     "type": "reranker",
-    "base_url": "http://127.0.0.1:8012/v1",
-    "max_context_tokens": 4096,
-    "max_tokens": 4096,
+    "base_url": "http://10.77.170.200:8001/v1",
+    "max_context_tokens": 8192,
+    "max_tokens": 8192,
     "min_context_headroom": 128,
     "stream_supported": false,
     "reasoning_supported": false,
-    "aliases": ["qwen3-reranker-0.6b", "reranker", "rerank", "qwen-reranker", "qwen-rerank"]
+    "aliases": ["qwen3-reranker-4b", "reranker", "rerank", "qwen-reranker", "qwen-rerank", "Qwen3-Reranker-4B"]
   },
   {
     "model": "${MODEL_CHAT}",
     "backend_model": "${MODEL_CHAT}",
     "type": "chat",
-    "base_url": "http://127.0.0.1:8013/v1",
-    "max_context_tokens": 32768,
-    "max_tokens": 32768,
+    "modality": "vl",
+    "vision_supported": true,
+    "base_url": "http://10.77.170.200:8000/v1",
+    "max_context_tokens": 131072,
+    "max_tokens": 131072,
     "min_context_headroom": 256,
     "stream_supported": false,
     "reasoning_supported": false,
-    "aliases": ["qwen35-9b", "chat", "llm", "qwen-chat"]
+    "aliases": ["qwen35-122b-a10b-fp8", "chat", "llm", "qwen-chat", "Qwen3.5-122B-A10B-FP8"]
+  },
+  {
+    "model": "${MODEL_CHAT_V2}",
+    "backend_model": "${MODEL_CHAT_V2}",
+    "type": "chat",
+    "modality": "vl",
+    "vision_supported": true,
+    "base_url": "http://10.77.170.201:8000/v1",
+    "max_context_tokens": 202752,
+    "max_tokens": 202752,
+    "min_context_headroom": 256,
+    "stream_supported": false,
+    "reasoning_supported": false,
+    "aliases": ["mimo-v2.5", "mimo", "mimo25", "chat", "llm", "mimo-chat", "MIMO-V2.5", "MiMo-V2.5"]
   }
 ]
