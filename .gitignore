@@ -26,7 +26,9 @@ htmlcov/
 .pyre/
 .pytype/
 
-!.env
+models.json
+
+.env
 !.env.*
 !.env.example
 
