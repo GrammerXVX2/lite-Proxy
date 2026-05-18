@@ -111,6 +111,11 @@ class GenerateRequest(BaseModel):
     message: dict[str, Any] | None = None
     messages: list[dict[str, Any]] | None = None
     stream: bool = False
+    # Logprobs.
+    logprobs: bool | None = None
+    top_logprobs: int | None = Field(default=None, ge=0, le=20)
+    # Raw prompt mode (bypass chat template, use /v1/completions).
+    raw: bool = False
     max_tokens: int | None = None
     num_ctx: int | None = None
     temperature: float | None = None
@@ -173,11 +178,7 @@ class OllamaTextResponseModel(BaseModel):
     prompt_eval_duration: int
     eval_count: int
     eval_duration: int
-    logprobs: dict[str, Any] | None = None
-    # OpenAI-compatible fields
-    object: str | None = None
-    choices: list[dict[str, Any]] | None = None
-    usage: dict[str, Any] | None = None
+    logprobs: list[dict[str, Any]] | dict[str, Any] | None = None
     # Ollama /api/chat message field
     message: dict[str, Any] | None = None
 
@@ -234,23 +235,6 @@ class ModelStatusItem(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class TopLogprob(BaseModel):
-    token: str
-    logprob: float
-    bytes: list[int] | None = None
-
-
-class LogprobToken(BaseModel):
-    token: str
-    logprob: float
-    bytes: list[int] | None = None
-    top_logprobs: list[TopLogprob] | None = None
-
-
-class RerankLogprobs(BaseModel):
-    content: list[LogprobToken] | None = None
-
-
 class RerankDocument(BaseModel):
     text: str | None = None
 
@@ -259,7 +243,6 @@ class RerankResult(BaseModel):
     index: int
     relevance_score: float
     document: RerankDocument | None = None
-    logprobs: RerankLogprobs | None = None
 
 
 class RerankUsage(BaseModel):
@@ -278,7 +261,6 @@ class RerankResponse(BaseModel):
 class ScoreResult(BaseModel):
     index: int
     score: float
-    logprobs: RerankLogprobs | None = None
 
 
 class ScoreResponse(BaseModel):
@@ -318,8 +300,6 @@ class RerankRequestModel(BaseModel):
     query: Any
     documents: list[Any] = Field(min_length=1)
     top_n: int | None = Field(default=None, ge=1)
-    logprobs: bool | None = None
-    top_logprobs: int | None = Field(default=None, ge=0, le=20)
 
 
 class ScoreRequestModel(BaseModel):
@@ -351,8 +331,6 @@ class ScoreRequestModel(BaseModel):
     items: Any | None = None
     data_1: Any | None = None
     data_2: Any | None = None
-    logprobs: bool | None = None
-    top_logprobs: int | None = Field(default=None, ge=0, le=20)
 
 
 class ModelsResponse(BaseModel):

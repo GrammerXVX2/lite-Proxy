@@ -133,7 +133,7 @@ async def _rerank_impl(request: Request, payload: dict[str, Any], path: str) -> 
                 "application/json": {
                     "schema": inline_schema(RerankRequestModel.model_json_schema()),
                     "examples": {
-                        "Без logprobs": {
+                        "Пример": {
                             "summary": "Обычный запрос",
                             "value": {
                                 "model": "qwen3-reranker-4b",
@@ -144,20 +144,6 @@ async def _rerank_impl(request: Request, payload: dict[str, Any], path: str) -> 
                                     "Принцип суперпозиции описывает нахождение квантовой системы в нескольких состояниях одновременно.",
                                 ],
                                 "top_n": 2,
-                            },
-                        },
-                        "С logprobs": {
-                            "summary": "С логитами (logprobs)",
-                            "value": {
-                                "model": "qwen3-reranker-4b",
-                                "query": "Что такое квантовая запутанность?",
-                                "documents": [
-                                    "Квантовая запутанность — явление, при котором состояния двух частиц взаимозависимы.",
-                                    "Фотосинтез — процесс преобразования световой энергии в химическую у растений.",
-                                ],
-                                "top_n": 2,
-                                "logprobs": True,
-                                "top_logprobs": 2,
                             },
                         },
                     },
@@ -199,7 +185,7 @@ async def api_rerank_v1(request: Request) -> dict[str, Any]:
                 "application/json": {
                     "schema": inline_schema(RerankRequestModel.model_json_schema()),
                     "examples": {
-                        "Без logprobs": {
+                        "Пример": {
                             "summary": "Обычный запрос",
                             "value": {
                                 "model": "qwen3-reranker-4b",
@@ -210,20 +196,6 @@ async def api_rerank_v1(request: Request) -> dict[str, Any]:
                                     "Принцип суперпозиции описывает нахождение квантовой системы в нескольких состояниях одновременно.",
                                 ],
                                 "top_n": 2,
-                            },
-                        },
-                        "С logprobs": {
-                            "summary": "С логитами (logprobs)",
-                            "value": {
-                                "model": "qwen3-reranker-4b",
-                                "query": "Что такое квантовая запутанность?",
-                                "documents": [
-                                    "Квантовая запутанность — явление, при котором состояния двух частиц взаимозависимы.",
-                                    "Фотосинтез — процесс преобразования световой энергии в химическую у растений.",
-                                ],
-                                "top_n": 2,
-                                "logprobs": True,
-                                "top_logprobs": 2,
                             },
                         },
                     },
@@ -265,22 +237,12 @@ async def api_rerank_v2(request: Request) -> dict[str, Any]:
                 "application/json": {
                     "schema": inline_schema(ScoreRequestModel.model_json_schema()),
                     "examples": {
-                        "Без logprobs": {
+                        "Пример": {
                             "summary": "Обычный запрос",
                             "value": {
                                 "model": "qwen3-reranker-4b",
                                 "text_1": "Что такое квантовая запутанность?",
                                 "text_2": "Квантовая запутанность — явление, при котором состояния двух частиц взаимозависимы.",
-                            },
-                        },
-                        "С logprobs": {
-                            "summary": "С логитами (logprobs)",
-                            "value": {
-                                "model": "qwen3-reranker-4b",
-                                "text_1": "Что такое квантовая запутанность?",
-                                "text_2": "Квантовая запутанность — явление, при котором состояния двух частиц взаимозависимы.",
-                                "logprobs": True,
-                                "top_logprobs": 2,
                             },
                         },
                     },

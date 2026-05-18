@@ -253,7 +253,7 @@ def ollama_response(
     start_ns: int,
     done_reason: str = "stop",
     usage: dict[str, Any] | None = None,
-    logprobs: dict[str, Any] | None = None,
+    logprobs: list[dict[str, Any]] | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Параметры:
@@ -277,23 +277,7 @@ def ollama_response(
     prompt_eval_count = _coerce_non_negative_int(usage_obj.get("prompt_tokens"), default=0)
     eval_count = _coerce_non_negative_int(usage_obj.get("completion_tokens"), default=0)
 
-    choice: dict[str, Any] = {
-        "index": 0,
-        "message": {"role": "assistant", "content": content},
-        "finish_reason": done_reason,
-    }
-    if logprobs is not None:
-        choice["logprobs"] = logprobs
-
     result: dict[str, Any] = {
-        # OpenAI-compatible fields (for n8n and other OpenAI-style clients)
-        "object": "chat.completion",
-        "choices": [choice],
-        "usage": {
-            "prompt_tokens": prompt_eval_count,
-            "completion_tokens": eval_count,
-            "total_tokens": prompt_eval_count + eval_count,
-        },
         # Ollama-compatible fields
         "model": model,
         "created_at": now_iso(),

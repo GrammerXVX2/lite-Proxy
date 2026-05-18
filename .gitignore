@@ -25,10 +25,9 @@ htmlcov/
 .dmypy.json
 .pyre/
 .pytype/
-
-models.json
-
-.env
+docker-compose.yml
+Dockerfile
+!.env
 !.env.*
 !.env.example
 

@@ -1,5 +1,6 @@
 import asyncio
 import random
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import httpx
@@ -94,4 +95,46 @@ async def post_json_to(
                 raise HTTPException(status_code=502, detail="upstream returned invalid json")
 
         raise HTTPException(status_code=502, detail="upstream retry exhausted")
+
+
+async def stream_response_from(
+    base_url: str,
+    path: str,
+    payload: dict[str, Any],
+    *,
+    model_type: ModelType | None = None,
+) -> AsyncGenerator[str, None]:
+    """Yield raw SSE lines from upstream while holding the concurrency slot."""
+    url = f"{base_url.rstrip('/')}{path}"
+    client = await get_http_client()
+
+    async with upstream_slot(model_type):
+        try:
+            async with client.stream("POST", url, json=payload) as response:
+                if response.status_code >= 400:
+                    body = await response.aread()
+                    raise HTTPException(
+                        status_code=response.status_code,
+                        detail=body.decode(errors="replace"),
+                    )
+                async for line in response.aiter_lines():
+                    yield line
+        except httpx.RequestError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"upstream connection error: {str(exc) or exc.__class__.__name__}",
+            )
+
+
+async def ping_model(base_url: str) -> tuple[bool, str]:
+    """GET /v1/models on the upstream and return (ok, error_detail)."""
+    url = f"{base_url.rstrip('/')}/models"
+    client = await get_http_client()
+    try:
+        response = await client.get(url, timeout=5.0)
+        if response.status_code < 400:
+            return True, ""
+        return False, f"HTTP {response.status_code}"
+    except httpx.RequestError as exc:
+        return False, str(exc) or exc.__class__.__name__
 
